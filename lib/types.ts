@@ -29,6 +29,22 @@ export type ParsedLabel = {
   notes: ConversionNote[];
 };
 
+export type LayoutPreviewItem = {
+  name: string;
+  kind: LabelObjectKind;
+  value: string;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+};
+
+export type LabelLayoutPreview = {
+  widthMm: number;
+  heightMm: number;
+  items: LayoutPreviewItem[];
+};
+
 export type ConversionResult = {
   fileName: string;
   nlbl: Uint8Array;
@@ -37,4 +53,5 @@ export type ConversionResult = {
   widthMm: number;
   heightMm: number;
   title: string;
+  layout: LabelLayoutPreview;
 };

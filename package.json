@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types --test lib/nlbl/layout.test.ts"
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.9.0",

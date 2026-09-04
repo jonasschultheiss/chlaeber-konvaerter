@@ -7,6 +7,7 @@ import type {
   LabelObjectKind,
   ParsedLabel,
 } from "@/lib/types";
+import { refineLabelObjects } from "@/lib/nlbl/layout";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const PNG_IEND = Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
@@ -47,6 +48,9 @@ const SKIP_STRINGS = new Set([
   "print quantity",
   "1...",
   "sample prompt",
+  "daten eingeben",
+  "beispiel für eingabe",
+  "beispiel fur eingabe",
 ]);
 
 export function parseBtw(fileName: string, bytes: Uint8Array): ParsedLabel {
@@ -71,7 +75,7 @@ export function parseBtw(fileName: string, bytes: Uint8Array): ParsedLabel {
     });
   }
 
-  const objects = inferObjects(strings, metadata, notes);
+  const objects = inferObjects(strings, metadata, notes, size.heightMm);
 
   if (headerText.includes("DataEntryForms>1") || /Daten eingeben/i.test(strings.join("\n"))) {
     notes.push({
@@ -97,7 +101,7 @@ export function parseBtw(fileName: string, bytes: Uint8Array): ParsedLabel {
   notes.push({
     level: "info",
     message:
-      "Positions are reconstructed for a small label. Open the file in ZebraDesigner Essentials and nudge objects if needed.",
+      "Objects are packed to fit the label. Open the file in ZebraDesigner Essentials if you still need to nudge them.",
   });
 
   return {
@@ -254,6 +258,7 @@ function inferObjects(
   strings: string[],
   metadata: HeaderMetadata,
   notes: ConversionNote[],
+  heightMm: number,
 ): LabelObject[] {
   const unique = uniquePreserveOrder(strings);
   const objects: LabelObject[] = [];
@@ -320,7 +325,7 @@ function inferObjects(
     });
   }
 
-  return objects.slice(0, 8);
+  return refineLabelObjects(objects, heightMm, notes);
 }
 
 function classifyString(value: string): LabelObjectKind | null {
@@ -339,7 +344,7 @@ function classifyString(value: string): LabelObjectKind | null {
     return "barcode";
   }
 
-  if (/daten eingeben|beispiel für eingabe|prompt/i.test(normalized)) {
+  if (/\bprompt\b/i.test(normalized)) {
     return "prompt";
   }
 

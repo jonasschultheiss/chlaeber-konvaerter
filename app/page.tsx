@@ -9,6 +9,22 @@ type ConversionNote = {
   message: string;
 };
 
+type LayoutPreviewItem = {
+  name: string;
+  kind: "text" | "barcode" | "prompt";
+  value: string;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+};
+
+type LabelLayoutPreview = {
+  widthMm: number;
+  heightMm: number;
+  items: LayoutPreviewItem[];
+};
+
 type ConvertSuccess = {
   fileName: string;
   title: string;
@@ -17,6 +33,7 @@ type ConvertSuccess = {
   notes: ConversionNote[];
   nlblBase64: string;
   previewPngBase64: string | null;
+  layout: LabelLayoutPreview;
 };
 
 export default function Home() {
@@ -126,6 +143,8 @@ export default function Home() {
             />
           ) : null}
 
+          <LabelPreview layout={result.layout} />
+
           <ul className="space-y-2 text-sm">
             {result.notes.map((note) => (
               <li
@@ -178,13 +197,15 @@ function readSuccess(payload: unknown): ConvertSuccess {
     "notes" in payload &&
     "nlblBase64" in payload &&
     "previewPngBase64" in payload &&
+    "layout" in payload &&
     typeof payload.fileName === "string" &&
     typeof payload.title === "string" &&
     typeof payload.widthMm === "number" &&
     typeof payload.heightMm === "number" &&
     typeof payload.nlblBase64 === "string" &&
     (payload.previewPngBase64 === null || typeof payload.previewPngBase64 === "string") &&
-    Array.isArray(payload.notes)
+    Array.isArray(payload.notes) &&
+    isLayout(payload.layout)
   ) {
     return {
       fileName: payload.fileName,
@@ -194,10 +215,107 @@ function readSuccess(payload: unknown): ConvertSuccess {
       nlblBase64: payload.nlblBase64,
       previewPngBase64: payload.previewPngBase64,
       notes: payload.notes.filter(isNote),
+      layout: payload.layout,
     };
   }
 
   throw new Error("Unexpected conversion response.");
+}
+
+function isLayout(value: unknown): value is LabelLayoutPreview {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  if (!("widthMm" in value) || !("heightMm" in value) || !("items" in value)) {
+    return false;
+  }
+  if (
+    typeof value.widthMm !== "number" ||
+    typeof value.heightMm !== "number" ||
+    !Array.isArray(value.items)
+  ) {
+    return false;
+  }
+  return value.items.every(isLayoutItem);
+}
+
+function isLayoutItem(value: unknown): value is LayoutPreviewItem {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    "kind" in value &&
+    "value" in value &&
+    "xMm" in value &&
+    "yMm" in value &&
+    "widthMm" in value &&
+    "heightMm" in value &&
+    typeof value.name === "string" &&
+    (value.kind === "text" || value.kind === "barcode" || value.kind === "prompt") &&
+    typeof value.value === "string" &&
+    typeof value.xMm === "number" &&
+    typeof value.yMm === "number" &&
+    typeof value.widthMm === "number" &&
+    typeof value.heightMm === "number"
+  );
+}
+
+function LabelPreview({ layout }: { layout: LabelLayoutPreview }) {
+  const padding = 8;
+  const scale = layout.widthMm > 0 ? 280 / layout.widthMm : 1;
+  const svgWidth = layout.widthMm * scale + padding * 2;
+  const svgHeight = layout.heightMm * scale + padding * 2;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+        Packed layout
+      </p>
+      <svg
+        aria-label="Converted label layout"
+        className="w-full max-w-sm rounded border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950"
+        role="img"
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+      >
+        <rect
+          fill="#ffffff"
+          height={layout.heightMm * scale}
+          stroke="#d4d4d8"
+          width={layout.widthMm * scale}
+          x={padding}
+          y={padding}
+        />
+        {layout.items.map((item) => {
+          const x = padding + item.xMm * scale;
+          const y = padding + item.yMm * scale;
+          const width = Math.max(item.widthMm * scale, 1);
+          const height = Math.max(item.heightMm * scale, 1);
+          const isBarcode = item.kind === "barcode";
+          return (
+            <g key={`${item.kind}-${item.name}`}>
+              <rect
+                fill={isBarcode ? "#18181b" : "#f4f4f5"}
+                height={height}
+                stroke={isBarcode ? "#18181b" : "#a1a1aa"}
+                width={width}
+                x={x}
+                y={y}
+              />
+              <text
+                fill={isBarcode ? "#ffffff" : "#18181b"}
+                fontSize={Math.max(7, Math.min(11, height * 0.45))}
+                textAnchor="middle"
+                x={x + width / 2}
+                y={y + height / 2 + 3}
+              >
+                {item.value}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
 }
 
 function isNote(value: unknown): value is ConversionNote {
