@@ -29,6 +29,35 @@ export type ParsedLabel = {
   notes: ConversionNote[];
 };
 
+export type LayoutPreviewItem = {
+  id: string;
+  name: string;
+  kind: LabelObjectKind;
+  value: string;
+  prompt: string;
+  symbology: BarcodeSymbology | null;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+  showHri: boolean;
+};
+
+export type LabelLayoutPreview = {
+  widthMm: number;
+  heightMm: number;
+  items: LayoutPreviewItem[];
+};
+
+export type ExportLabel = {
+  fileName: string;
+  title: string;
+  widthMm: number;
+  heightMm: number;
+  printer: string | null;
+  items: LayoutPreviewItem[];
+};
+
 export type ConversionResult = {
   fileName: string;
   nlbl: Uint8Array;
@@ -37,4 +66,6 @@ export type ConversionResult = {
   widthMm: number;
   heightMm: number;
   title: string;
+  printer: string | null;
+  layout: LabelLayoutPreview;
 };

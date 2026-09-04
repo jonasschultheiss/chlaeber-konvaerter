@@ -6,13 +6,17 @@ import {
   ZipWriter,
 } from "@zip.js/zip.js";
 import type { BarcodeSymbology, LabelObject, ParsedLabel } from "@/lib/types";
+import { layoutLabel, type PlacedObject } from "@/lib/nlbl/layout";
 import { escapeXml, xmlHeader } from "@/lib/xml";
 
 const NLBL_PASSWORD = ",^_A5Fus&!?j='Epiq*e";
 
 configure({ useWebWorkers: false });
 
-export async function writeNlbl(label: ParsedLabel): Promise<Uint8Array> {
+export async function writeNlbl(
+  label: ParsedLabel,
+  placements?: PlacedObject[],
+): Promise<Uint8Array> {
   const formatId = randomUUID();
   const solutionId = randomUUID();
   const safeName = sanitizeFileStem(label.title || "label");
@@ -35,6 +39,7 @@ export async function writeNlbl(label: ParsedLabel): Promise<Uint8Array> {
     heightMm: label.heightMm,
     printer: label.printer,
     variables,
+    placements,
   });
 
   const zipWriter = new ZipWriter(new Uint8ArrayWriter(), {
@@ -155,10 +160,11 @@ function buildFormat(input: {
   heightMm: number;
   printer: string | null;
   variables: VariableBinding[];
+  placements?: PlacedObject[];
 }): string {
   const width = Math.round(input.widthMm * 1000);
   const height = Math.round(input.heightMm * 1000);
-  const items = layoutItems(input.variables, width, height);
+  const items = layoutItems(input.variables, width, height, input.placements);
 
   return `\uFEFF${xmlHeader()}<EuroPlus.NiceLabel Type="Format">
   <Id>${input.formatId}</Id>
@@ -248,53 +254,60 @@ ${items}
 `;
 }
 
-function layoutItems(variables: VariableBinding[], width: number, height: number): string {
-  const margin = Math.round(Math.min(width, height) * 0.08);
-  const barcodeHeight = Math.round(height * 0.48);
-  let y = margin;
-  let zOrder = 1;
-  const parts: string[] = [];
+function layoutItems(
+  variables: VariableBinding[],
+  width: number,
+  height: number,
+  placements?: PlacedObject[],
+): string {
+  const byId = new Map(variables.map((binding) => [binding.object.id, binding]));
+  const resolved =
+    placements ??
+    layoutLabel(
+      variables.map((binding) => binding.object),
+      width,
+      height,
+    );
 
-  for (const binding of variables) {
-    const kind = binding.object.kind;
-    switch (kind) {
-      case "barcode": {
-        parts.push(
-          barcodeItem({
-            binding,
-            x: margin,
-            y,
-            width: width - margin * 2,
-            height: Math.max(6000, barcodeHeight),
-            zOrder,
-          }),
-        );
-        y += barcodeHeight + Math.round(margin * 0.6);
-        zOrder += 1;
-        break;
+  return resolved
+    .map((placement) => {
+      const binding = byId.get(placement.object.id);
+      if (!binding) {
+        return "";
       }
-      case "text":
-      case "prompt": {
-        parts.push(
-          textItem({
-            binding,
-            x: margin,
-            y,
-            zOrder,
-          }),
-        );
-        y += Math.round(height * 0.18);
-        zOrder += 1;
-        break;
-      }
-      default: {
-        const exhaustive: never = kind;
-        return exhaustive;
-      }
+      return renderPlacedObject(binding, placement);
+    })
+    .filter((xml) => xml.length > 0)
+    .join("\r\n");
+}
+
+function renderPlacedObject(binding: VariableBinding, placement: PlacedObject): string {
+  const kind = placement.object.kind;
+  switch (kind) {
+    case "barcode":
+      return barcodeItem({
+        binding,
+        x: placement.x,
+        y: placement.y,
+        width: placement.width,
+        height: placement.height,
+        zOrder: placement.zOrder,
+        moduleWidth: placement.barcodeModuleUm ?? 125,
+        showHri: placement.showHri,
+      });
+    case "text":
+    case "prompt":
+      return textItem({
+        binding,
+        x: placement.x,
+        y: placement.y,
+        zOrder: placement.zOrder,
+      });
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
     }
   }
-
-  return parts.join("\r\n");
 }
 
 function textItem(input: {
@@ -356,9 +369,12 @@ function barcodeItem(input: {
   width: number;
   height: number;
   zOrder: number;
+  moduleWidth: number;
+  showHri: boolean;
 }): string {
   const { object, variableId } = input.binding;
   const symbology = object.symbology ?? "code128";
+  const interpretation = input.showHri ? 1 : 0;
   return `        <Item Type="BarcodeDocumentItem">
           <Id>${randomUUID()}</Id>
           <Name>${escapeXml(object.name)}</Name>
@@ -367,12 +383,12 @@ function barcodeItem(input: {
             <HasCheckDigit>False</HasCheckDigit>
             <AutomaticCheckDigit>True</AutomaticCheckDigit>
             <HasManualEncoding>False</HasManualEncoding>
-            <BaseBarWidth>250</BaseBarWidth>
-            <UserBarWidth>250</UserBarWidth>
+            <BaseBarWidth>${input.moduleWidth}</BaseBarWidth>
+            <UserBarWidth>${input.moduleWidth}</UserBarWidth>
             <ModuleHeight>${input.height}</ModuleHeight>
             <UserRatio>3</UserRatio>
             <Ratio>3</Ratio>
-            <HumanInterpretationPosition>1</HumanInterpretationPosition>
+            <HumanInterpretationPosition>${interpretation}</HumanInterpretationPosition>
             <DisplayCheckDigit>False</DisplayCheckDigit>
           </BarcodeData>
           <SampleValue Type="StringContents">
