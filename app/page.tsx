@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent, type ReactElement } from "react";
 
 type NoteLevel = "info" | "warn";
 
@@ -260,6 +260,37 @@ function isLayoutItem(value: unknown): value is LayoutPreviewItem {
   );
 }
 
+function renderBarcodeStripes(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): ReactElement[] {
+  const barHeight = Math.max(height - 10, height * 0.7);
+  const barModule = Math.max(1.2, width / 70);
+  const stripes: ReactElement[] = [];
+  let offset = 4;
+  let index = 0;
+  while (offset < width - 4) {
+    const barWidth = index % 4 === 0 ? barModule * 1.8 : barModule;
+    if (index % 2 === 0) {
+      stripes.push(
+        <rect
+          fill="#18181b"
+          height={barHeight}
+          key={`bar-${index}`}
+          width={barWidth}
+          x={x + offset}
+          y={y + 2}
+        />,
+      );
+    }
+    offset += barWidth + barModule * 0.6;
+    index += 1;
+  }
+  return stripes;
+}
+
 function LabelPreview({ layout }: { layout: LabelLayoutPreview }) {
   const padding = 8;
   const scale = layout.widthMm > 0 ? 280 / layout.widthMm : 1;
@@ -294,19 +325,20 @@ function LabelPreview({ layout }: { layout: LabelLayoutPreview }) {
           return (
             <g key={`${item.kind}-${item.name}`}>
               <rect
-                fill={isBarcode ? "#18181b" : "#f4f4f5"}
+                fill="#ffffff"
                 height={height}
-                stroke={isBarcode ? "#18181b" : "#a1a1aa"}
+                stroke="#a1a1aa"
                 width={width}
                 x={x}
                 y={y}
               />
+              {isBarcode ? renderBarcodeStripes(x, y, width, height) : null}
               <text
-                fill={isBarcode ? "#ffffff" : "#18181b"}
-                fontSize={Math.max(7, Math.min(11, height * 0.45))}
+                fill="#18181b"
+                fontSize={Math.max(7, Math.min(11, height * 0.28))}
                 textAnchor="middle"
                 x={x + width / 2}
-                y={y + height / 2 + 3}
+                y={isBarcode ? y + height - 4 : y + height / 2 + 3}
               >
                 {item.value}
               </text>
