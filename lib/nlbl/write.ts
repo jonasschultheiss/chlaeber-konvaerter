@@ -13,7 +13,10 @@ const NLBL_PASSWORD = ",^_A5Fus&!?j='Epiq*e";
 
 configure({ useWebWorkers: false });
 
-export async function writeNlbl(label: ParsedLabel): Promise<Uint8Array> {
+export async function writeNlbl(
+  label: ParsedLabel,
+  placements?: PlacedObject[],
+): Promise<Uint8Array> {
   const formatId = randomUUID();
   const solutionId = randomUUID();
   const safeName = sanitizeFileStem(label.title || "label");
@@ -36,6 +39,7 @@ export async function writeNlbl(label: ParsedLabel): Promise<Uint8Array> {
     heightMm: label.heightMm,
     printer: label.printer,
     variables,
+    placements,
   });
 
   const zipWriter = new ZipWriter(new Uint8ArrayWriter(), {
@@ -156,10 +160,11 @@ function buildFormat(input: {
   heightMm: number;
   printer: string | null;
   variables: VariableBinding[];
+  placements?: PlacedObject[];
 }): string {
   const width = Math.round(input.widthMm * 1000);
   const height = Math.round(input.heightMm * 1000);
-  const items = layoutItems(input.variables, width, height);
+  const items = layoutItems(input.variables, width, height, input.placements);
 
   return `\uFEFF${xmlHeader()}<EuroPlus.NiceLabel Type="Format">
   <Id>${input.formatId}</Id>
@@ -249,15 +254,22 @@ ${items}
 `;
 }
 
-function layoutItems(variables: VariableBinding[], width: number, height: number): string {
+function layoutItems(
+  variables: VariableBinding[],
+  width: number,
+  height: number,
+  placements?: PlacedObject[],
+): string {
   const byId = new Map(variables.map((binding) => [binding.object.id, binding]));
-  const placements = layoutLabel(
-    variables.map((binding) => binding.object),
-    width,
-    height,
-  );
+  const resolved =
+    placements ??
+    layoutLabel(
+      variables.map((binding) => binding.object),
+      width,
+      height,
+    );
 
-  return placements
+  return resolved
     .map((placement) => {
       const binding = byId.get(placement.object.id);
       if (!binding) {

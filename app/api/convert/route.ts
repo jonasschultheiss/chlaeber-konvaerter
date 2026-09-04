@@ -14,6 +14,7 @@ type ConvertSuccess = {
   notes: ConversionNote[];
   nlblBase64: string;
   previewPngBase64: string | null;
+  printer: string | null;
   layout: LabelLayoutPreview;
 };
 
@@ -53,6 +54,7 @@ export async function POST(
       previewPngBase64: result.previewPng
         ? Buffer.from(result.previewPng).toString("base64")
         : null,
+      printer: result.printer,
       layout: result.layout,
     };
     return Response.json(body);

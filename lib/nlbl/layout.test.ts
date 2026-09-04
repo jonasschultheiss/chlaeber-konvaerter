@@ -4,7 +4,9 @@ import type { LabelObject } from "../types";
 import {
   estimateCode128Modules,
   layoutLabel,
+  placementsFromLayoutItems,
   refineLabelObjects,
+  toPreviewLayout,
 } from "./layout";
 
 function object(
@@ -73,6 +75,25 @@ test("layout keeps every object inside a 38x19 mm label", () => {
   const encodedWidth =
     barcode.barcodeModuleUm * estimateCode128Modules(barcode.object.value);
   assert.ok(encodedWidth <= barcode.width, "barcode modules fit the allocated width");
+});
+
+test("preview items keep ids and export placements keep edits", () => {
+  const placements = layoutLabel(
+    [object("text", "Beispieltext", "Beispieltext"), object("barcode", "Barcode", "12345678")],
+    38_000,
+    19_000,
+  );
+  const preview = toPreviewLayout(placements, 38_000, 19_000);
+  assert.equal(preview.items[0]?.id, "Beispieltext");
+  const moved = preview.items.map((item) =>
+    item.kind === "text" ? { ...item, value: "Charge 42", xMm: 2, yMm: 3 } : item,
+  );
+  const exported = placementsFromLayoutItems(moved);
+  const text = exported.find((item) => item.object.kind === "text");
+  assert.ok(text);
+  assert.equal(text.object.value, "Charge 42");
+  assert.equal(text.x, 2000);
+  assert.equal(text.y, 3000);
 });
 
 test("layout still fits when many unique texts are supplied", () => {

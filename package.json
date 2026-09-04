@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/nlbl/layout.test.ts"
+    "test": "tsx --test lib/nlbl/layout.test.ts lib/nlbl/nudge.test.ts lib/label-payload.test.ts"
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.9.0",

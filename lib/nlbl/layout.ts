@@ -1,4 +1,9 @@
-import type { BarcodeSymbology, ConversionNote, LabelObject } from "../types";
+import type {
+  BarcodeSymbology,
+  ConversionNote,
+  LabelObject,
+  LayoutPreviewItem,
+} from "../types";
 
 const UM_PER_MM = 1000;
 
@@ -13,19 +18,7 @@ export type PlacedObject = {
   showHri: boolean;
 };
 
-export type LabelLayout = {
-  widthMm: number;
-  heightMm: number;
-  items: Array<{
-    name: string;
-    kind: LabelObject["kind"];
-    value: string;
-    xMm: number;
-    yMm: number;
-    widthMm: number;
-    heightMm: number;
-  }>;
-};
+export const HRI_UM = 2400;
 
 export function refineLabelObjects(
   objects: LabelObject[],
@@ -92,7 +85,7 @@ export function layoutLabel(
   const barcode = objects.find((object) => object.kind === "barcode") ?? null;
   const textLineUm = clamp(Math.round(innerBottom * 0.16), 2200, 3200);
   const gapUm = clamp(Math.round(Math.min(widthUm, heightUm) * 0.03), 400, 800);
-  const hriUm = 2400;
+  const hriUm = HRI_UM;
   const minBarcodeUm = 5000;
   const showHri = Boolean(
     barcode && !texts.some((text) => normalizeValue(text.value) === normalizeValue(barcode.value)),
@@ -158,22 +151,59 @@ export function toPreviewLayout(
   placements: PlacedObject[],
   widthUm: number,
   heightUm: number,
-): LabelLayout {
+): {
+  widthMm: number;
+  heightMm: number;
+  items: LayoutPreviewItem[];
+} {
   return {
     widthMm: roundMm(widthUm / UM_PER_MM),
     heightMm: roundMm(heightUm / UM_PER_MM),
     items: placements.map((placement) => ({
+      id: placement.object.id,
       name: placement.object.name,
       kind: placement.object.kind,
       value: placement.object.value,
+      prompt: placement.object.prompt,
+      symbology: placement.object.symbology,
       xMm: roundMm(placement.x / UM_PER_MM),
       yMm: roundMm(placement.y / UM_PER_MM),
       widthMm: roundMm(placement.width / UM_PER_MM),
       heightMm: roundMm(
-        (placement.height + (placement.showHri ? 2400 : 0)) / UM_PER_MM,
+        (placement.height + (placement.showHri ? HRI_UM : 0)) / UM_PER_MM,
       ),
+      showHri: placement.showHri,
     })),
   };
+}
+
+export function placementsFromLayoutItems(items: LayoutPreviewItem[]): PlacedObject[] {
+  return items.map((item, index) => {
+    const object: LabelObject = {
+      id: item.id,
+      kind: item.kind,
+      name: item.name.trim() || "Field",
+      value: item.value,
+      prompt: item.prompt.trim() || item.name.trim() || "Field",
+      symbology: item.kind === "barcode" ? (item.symbology ?? "code128") : null,
+    };
+    const hriUm = object.kind === "barcode" && item.showHri ? HRI_UM : 0;
+    const width = Math.max(1000, Math.round(item.widthMm * UM_PER_MM));
+    const height = Math.max(1000, Math.round(item.heightMm * UM_PER_MM) - hriUm);
+    return {
+      object,
+      x: Math.round(item.xMm * UM_PER_MM),
+      y: Math.round(item.yMm * UM_PER_MM),
+      width,
+      height,
+      zOrder: index + 1,
+      barcodeModuleUm:
+        object.kind === "barcode"
+          ? barcodeModuleWidth(object.symbology ?? "code128", object.value, width)
+          : null,
+      showHri: object.kind === "barcode" && item.showHri,
+    };
+  });
 }
 
 export function estimateCode128Modules(value: string): number {
